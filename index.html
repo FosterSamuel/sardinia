@@ -1,0 +1,162 @@
+<!DOCTYPE html>
+<html lang="en-us" }}">
+<head>
+	<meta charset="UTF-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1">
+	<meta http-equiv="X-UA-Compatible" content="IE=edge">
+	<title>Sardinia</title>
+	<meta name="description" content="">
+	<meta name="author" content="Samuel Foster">
+	<link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+	<main id="container">
+		<h1 v-bind:class="{ hidden: conn.setup }"><a href="../sardinia/">Sardinia</a></h1>
+		<section v-if="!conn.setup">
+			<h2 class="hidden">Game setup</h2>
+			<section v-if="!conn.offer && !conn.answerDescription">
+				<h3 class="hidden">Start online or local game</h3>
+				<button v-on:click="createGame()">Play 1v1 game</button>
+				<button v-on:click="createLocalGame()">Start local game</button>
+			</section>	
+			<section v-if="conn.offer" v-cloak>
+				<h3 class="hidden">Online game invitation and response code</h3>
+				<p>Send invitation link:</p>
+				<input :value="conn.offer" name="offer" readonly="true" >
+				<button v-on:click="copyGameOffer()">Copy to clipboard {{ conn.offerCopied }}</button>
+				<p>Put response code here:</p>
+				<input v-on:keyup.enter="startGame()" v-model="conn.remoteAnswerDescription" name="response"  />
+				<button v-on:click.lazy="startGame()" v-bind:disabled="conn.starting || !conn.remoteAnswerDescription">Start game</button>
+			</section>
+			<section v-if="conn.answerDescription" v-cloak>
+				<p>Send response code to host player:</p>
+				<input :value="conn.answerDescription" name="response-code" readonly="true">
+				<button v-on:click="copyAnswerDescription()">Copy to clipboard {{ conn.offerCopied }}</button>
+			</section>
+		</section>
+		<section v-else v-cloak class="live-game">
+			<h1 live-game><a href="../sardinia/">Sardinia</a></h1>
+			<canvas id="sardinia-canvas"></canvas>
+			<details>
+				<h2 class="hidden">Game menu</h2>
+				<summary v-on:click="changeMenuText()"> {{ menuText }}</summary>
+				<section id="menuArea">
+					<button v-on:click="setMenu('howToPlay')">How to play</button>
+					<button v-on:click="setMenu('settings')">Settings</button>
+					<button v-on:click="setMenu('about')">About</button>
+					<!-- For later: 	
+						<ul>
+							<h4>Moves</h4>
+							<li v-for="move in game.moves">{{ move.notatedMove }}{{ move.build == -1 ? "" : "   " + move.build }}</li>
+						</ul> 
+					-->
+					<div v-if="menuOn == 'howToPlay'">
+						<h3>How to play</h3>
+						<p>Watch <a href="https://www.youtube.com/watch?v=wIJs0k-1ync" target="_blank" class="small">this video explaining the rules.</a></p>
+						<h3>Game running slow?</h3>
+						<p>Try turning on hardware acceleration for your browser.</p>
+					</div>
+					<div v-if="menuOn == 'settings'">
+						<h3>Sound</h3>
+						<label for="volume">Volume</label>
+						<input v-model="volume" type="range" id="volume" name="volume"  min="0" max="10">
+						<span>{{ volume }}</span>
+						<br>
+						<label for="tapSound">Moves</label>
+						<input v-model="volumeTapEnabled"  type="checkbox" id="tapSound" />
+						<br>
+						<label for="buildSound">Builds</label>
+						<input v-model="volumeBuildEnabled" type="checkbox" id="buildSound" />
+						<h3>Highlighting</h3>
+						<label for="highlightMoves">Moves</label>
+						<input type="checkbox" id="highlightMoves" v-model="boardSettings.highlightMoves" />
+						<br>
+						<label for="highlightBuilds">Builds</label>
+						<input type="checkbox" id="highlightBuilds" v-model="boardSettings.highlightBuilds" />
+						<br>
+						<label for="highlightPlayers">Players</label>
+						<input type="checkbox" id="highlightPlayers" v-model="boardSettings.highlightPlayers" />
+					</div>
+					<div v-if="menuOn == 'about'">
+						<h3>About</h3>
+						<p>Sardinia is a free game based on the basic rules of <a target="_blank" href="https://roxley.com/products/santorini">Santorini</a>, the board game designed by <a target="_blank" href="https://mathpickle.com/">Gordon Hamilton.</a></p>
+						<p>This game is maintained by Samuel Foster. For more information and all the code, see the <a target="_blank" href="https://www.github.com/fostersamuel/sardinia">GitHub repository.</a></p>
+						<h4> Acknowledgements</h4>
+						<ul>
+							<li>
+								<a href="https://threejsfundamentals.org" target="_blank">ThreeJSFundamentals</a>
+							</li>
+							<li>
+								<a href="https://github.com/michal-wrzosek/p2p-chat" target="_blank">p2p-chat</a>
+							</li>
+							<li>
+								<a href="https://www.thingiverse.com/thing:3988576" target="_blank">Samuel Flodeby</a> (under <a href="https://creativecommons.org/licenses/by/4.0/" target="_blank">CC BY 4.0</a>)
+							</li>
+							<li>
+								<a href="http://quadropolis.us/node/2107" target="_blank">Matthew "[Soul]Sub-Z0|TO"</a>
+							</li>
+							<li>
+								<a href="https://freesound.org/people/SuGu14/sounds/78063/" target="_blank">Fabià Serra Arrizabalaga</a>
+							</li>
+							<li>
+								<a href="https://freesound.org/people/rhodesmas/sounds/320657/" target="_blank">Andy Rhode</a>
+							</li>
+						</ul>
+					</div>
+				</section>
+			</details>
+			<section v-if="gameWon == -1" class="gameStatus">
+				<h2 class="hidden">Player turn</h2>
+				<span v-if="game.playerTurn == 0" class="firstPlayerTurn">
+					{{ conn.host == 0 ? "Their turn." : "Your turn." }} 
+				</span>
+				<span v-else class="secondPlayerTurn">
+					{{ conn.host == 1 ? "Their turn." : "Your turn." }} 
+				</span>
+			</section>
+			<section v-else class="gameStatus">
+				<p v-if="theyWantReplay"> {{ isLocalGame ? "" : "They want to replay!" }} <button v-on:click="acceptReplayRequest()">Play again</button></p>
+				<p v-else><button v-bind:disabled="youWantReplay" v-on:click="sendReplayRequest()"> {{ youWantReplay ? "Waiting on response..." : "Send replay request" }}</button></p>
+			</section>
+		</section>
+		<footer v-if="!conn.setup">
+			<h2 class="hidden">About</h2>
+			<p>Sardinia is a free game based on the basic rules of <a target="_blank" href="https://roxley.com/products/santorini">Santorini</a>, the board game designed by <a target="_blank" href="https://mathpickle.com/">Gordon Hamilton.</a></p>
+			<p>This game is maintained by Samuel Foster. For more information and all the code, see the <a target="_blank" href="https://www.github.com/fostersamuel/sardinia">GitHub repository.</a></p>
+			<h3> Acknowledgements</h4>
+			<ul>
+				<li>
+					<a href="https://threejsfundamentals.org" target="_blank">ThreeJSFundamentals</a>
+				</li>
+				<li>
+					<a href="https://github.com/michal-wrzosek/p2p-chat" target="_blank">p2p-chat</a>
+				</li>
+				<li>
+					<a href="https://www.thingiverse.com/thing:3988576" target="_blank">Samuel Flodeby</a> (under <a href="https://creativecommons.org/licenses/by/4.0/" target="_blank">CC BY 4.0</a>)
+				</li>
+				<li>
+					<a href="http://quadropolis.us/node/2107" target="_blank">Matthew "[Soul]Sub-Z0|TO"</a>
+				</li>
+				<li>
+					<a href="https://freesound.org/people/SuGu14/sounds/78063/" target="_blank">Fabià Serra Arrizabalaga</a>
+				</li>
+				<li>
+					<a href="https://freesound.org/people/rhodesmas/sounds/320657/" target="_blank">Andy Rhode</a>
+				</li>
+			</ul>
+		</footer>
+	
+		</main>
+    <script src="js/tween.js"></script>
+	<script src="js/vue.min.js"></script>
+	<script src="js/createPeerConnection.js"></script>
+	<script src="js/howler.min.js"></script>
+	<script src="js/three.js"></script>
+	<script src="js/OrbitControls.js"></script>
+	<script src="js/BufferGeometryUtils.js"></script>
+	<script src="js/STLLoader.js"></script>
+	<script src="js/game.js"></script>
+	<script type="module" src="js/3d.js"></script>
+	<script type="module" src="js/ui.js"></script>
+</body>
+</html>
